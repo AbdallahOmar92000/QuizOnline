@@ -74,7 +74,7 @@ TEMPLATES = [
 
 #WSGI_APPLICATION = 'config.wsgi.application'
 # إعداد تطبيق ASGI بدلاً من WSGI
-ASGI_APPLICATION = 'config.asgi.py'
+ASGI_APPLICATION = 'config.asgi.application'
 
 # إعدادات الـ Channel Layer مع Redis
 CHANNEL_LAYERS = {

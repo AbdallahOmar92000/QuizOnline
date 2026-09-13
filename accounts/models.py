@@ -1,5 +1,5 @@
 from django.db import models
-
+from django.conf import settings  # أُضيفت لاستخدام settings.AUTH_USER_MODEL
 # Create your models here.
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 
@@ -28,7 +28,7 @@ class User(AbstractUser):
     
     # حقول نظام الـ Coins
     coins = models.PositiveIntegerField(default=10, verbose_name="رصيد الـ Coins")
-    
+    ad_watch_count = models.PositiveIntegerField(default=0, verbose_name="عداد مشاهدة الإعلانات")  # <-- مكان إضافته هنا
     # الصلاحيات والتحكم الإداري بالتطبيقات
     can_access_quiz_app = models.BooleanField(default=True, verbose_name="السماح بتطبيق المسابقات")
     can_access_other_app = models.BooleanField(default=True, verbose_name="السماح بالتطبيق الآخر")

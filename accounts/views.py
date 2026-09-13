@@ -151,18 +151,29 @@ class UserDevicesListView (generics.ListAPIView):
 
 
 class AddCoinsRewardView(APIView):
-    permission_classes=[permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
 
-    def post(self,request):
-        reward_coins=5
+    def post(self, request):
         user = request.user
+        user.ad_watch_count += 1
+        
+        coins_added = 0
+        # كل إعلانين يتم إضافة 1 Coin
+        if user.ad_watch_count >= 2:
+            user.coins += 1
+            user.ad_watch_count = 0  # إعادة ضبط العداد
+            coins_added = 1
+            message = "تهانينا! أكملت مشاهدة إعلانين وحصلت على 1 Coin."
+        else:
+            message = "تم تسجيل مشاهدة الإعلان الأول. شاهد إعلاناً آخر للحصول على 1 Coin."
 
-        user.coins += reward_coins
         user.save()
 
         return Response({
-            "detail": f"تمت إضافة {reward_coins} عملة بنجاح.",
-            "current_coins": user.coins
+            "detail": message,
+            "current_coins": user.coins,
+            "ad_watch_count": user.ad_watch_count,
+            "coins_added": coins_added
         }, status=status.HTTP_200_OK)
 
 
