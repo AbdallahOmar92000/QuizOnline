@@ -161,6 +161,7 @@ class QuizParticipant(models.Model):
     quiz = models.ForeignKey(LiveQuiz, on_delete=models.CASCADE, verbose_name="المسابقة")
     score = models.PositiveIntegerField(default=0, verbose_name="النقاط")
     is_eliminated = models.BooleanField(default=False, verbose_name="مستبعد / خسر")
+    lives = models.IntegerField(default=2)  # 2 = فرصة كاملة، 1 = خسر الفرصة الأولى، 0 = استبعاد
     is_spectator = models.BooleanField(default=False, verbose_name="مشاهد / ضيف")
     joined_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الانضمام")
 

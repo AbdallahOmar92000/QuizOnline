@@ -79,7 +79,8 @@ from rest_framework import status, permissions
 from django.db import transaction
 from .models import LiveQuiz, QuizParticipant, QuestionBank
 
-class SubmitAnswerView(APIView):
+class SubmitAnswerView2(APIView):
+
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, quiz_id):
@@ -106,6 +107,63 @@ class SubmitAnswerView(APIView):
             "current_score": participant.score
         }, status=status.HTTP_200_OK)
 
+
+class SubmitAnswerView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, quiz_id):
+        user = request.user
+        question_id = request.data.get('question_id')
+        selected_option = request.data.get('selected_option') # قد يكون None إذا انتهت الـ 10 ثوانٍ
+
+        try:
+            quiz = LiveQuiz.objects.get(id=quiz_id, is_active=True)
+            question = QuestionBank.objects.get(id=question_id)
+            participant = QuizParticipant.objects.get(user=user, quiz=quiz)
+        except (LiveQuiz.DoesNotExist, QuestionBank.DoesNotExist, QuizParticipant.DoesNotExist):
+            return Response({"error": "المعلومات غير صحيحة أو المتسابق غير موجود"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # التحقق مما إذا كان مستبعداً
+        if participant.is_eliminated:
+            return Response({"detail": "أنت مستبعد من المسابقة."}, status=status.HTTP_403_FORBIDDEN)
+
+        is_correct = (selected_option == question.correct_option)
+
+        if is_correct:
+            participant.score += 10
+            participant.save()
+            return Response({
+                "is_correct": True,
+                "score": participant.score,
+                "lives": participant.lives
+            }, status=status.HTTP_200_OK)
+        else:
+            # خصم فرصة بسبب الإجابة الخاطئة أو انتهاء الـ 10 ثوانٍ
+            participant.lives -= 1
+
+            if participant.lives == 1:
+                # خسر الفرصة الأولى
+                participant.save()
+                return Response({
+                    "is_correct": False,
+                    "lives_left": 1,
+                    "status": "first_life_lost",
+                    "detail": "خسرت الفرصة الأولى! لديك فرصة أخيرة."
+                }, status=status.HTTP_200_OK)
+            else:
+                # خسر الفرصة الثانية -> استبعاد
+                participant.lives = 0
+                participant.is_eliminated = True
+                participant.save()
+                return Response({
+                    "is_correct": False,
+                    "lives_left": 0,
+                    "status": "eliminated",
+                    "detail": "تم استبعادك من المسابقة! يمكنك استخدام الإنعاش للعودة."
+                }, status=status.HTTP_200_OK)
+
+            
 
 class ReviveParticipantView(APIView):
     permission_classes = [permissions.IsAuthenticated]

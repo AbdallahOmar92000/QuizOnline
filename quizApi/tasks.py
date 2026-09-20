@@ -2,15 +2,10 @@ import time
 from celery import shared_task
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.utils import timezone
 from .models import LiveQuiz, QuizQuestionOrder
 from .utils import generate_random_quiz_questions
 
-import time
-from celery import shared_task
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
-from .models import LiveQuiz, QuizQuestionOrder
-from .utils import generate_random_quiz_questions
 
 @shared_task
 def run_live_quiz_engine(quiz_id):
@@ -70,12 +65,12 @@ def run_live_quiz_engine(quiz_id):
                     'C': q.option_c,
                     'D': q.option_d,
                 },
-                'duration_seconds': 15
+                'duration_seconds': 10
             }
         )
         
-        print(f"[CELERY] ⏳ انتظار 15 ثانية للإجابة...")
-        time.sleep(15)
+        print(f"[CELERY] ⏳ انتظار 10 ثوانٍ للإجابة...")
+        time.sleep(10)
 
         # 4. بث الإجابة الصحيحة
         print(f"[CELERY] ✅ كشف الإجابة الصحيحة: ({q.correct_option})")
@@ -111,21 +106,16 @@ def run_live_quiz_engine(quiz_id):
     )
 
 
-
-from django.utils import timezone
-
 @shared_task
 def trigger_daily_quiz_at_3pm():
     """مهمة تعمل الساعة 3:00 مساءً للبحث عن مسابقة اليوم وتشغيلها"""
     now = timezone.now()
     
-    # البحث عن مسابقة تبدأ اليوم وغير منتهية
     quiz = LiveQuiz.objects.filter(
         start_time__date=now.date(),
         is_finished=False
     ).first()
 
-    # إن لم توجد مسابقة مجهزة، أنشئ مسابقة اليوم تلقائياً
     if not quiz:
         quiz = LiveQuiz.objects.create(
             title=f"مسابقة {now.strftime('%Y-%m-%d')} المباشرة",
@@ -134,5 +124,4 @@ def trigger_daily_quiz_at_3pm():
             revive_cost_coins=5
         )
 
-    # تشغيل محرك المسابقة عبر Celery
     run_live_quiz_engine.delay(quiz.id)
