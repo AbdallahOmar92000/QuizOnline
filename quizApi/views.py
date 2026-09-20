@@ -4,6 +4,8 @@ from rest_framework import status, permissions
 from django.utils import timezone
 from .models import LiveQuiz, QuizParticipant
 from .serializers import LiveQuizSerializer, QuizParticipantSerializer
+from django.shortcuts import render, get_object_or_404
+
 
 class UpcomingQuizView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -69,3 +71,72 @@ class JoinQuizView(APIView):
                 "is_spectator": True,
                 "current_coins": user.coins
             }, status=status.HTTP_200_OK)
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from django.db import transaction
+from .models import LiveQuiz, QuizParticipant, QuestionBank
+
+class SubmitAnswerView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, quiz_id):
+        user = request.user
+        question_id = request.data.get('question_id')
+        selected_option = request.data.get('selected_option')
+
+        try:
+            quiz = LiveQuiz.objects.get(id=quiz_id, is_active=True)
+            question = QuestionBank.objects.get(id=question_id)
+            participant, _ = QuizParticipant.objects.get_or_create(user=user, quiz=quiz)
+        except (LiveQuiz.DoesNotExist, QuestionBank.DoesNotExist):
+            return Response({"error": "المسابقة غير نشطة أو السؤال غير موجود"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # التحقق من الإجابة وزيادة النقاط
+        is_correct = (selected_option == question.correct_option)
+        if is_correct:
+            participant.score += 10
+            participant.save()
+
+        return Response({
+            "is_correct": is_correct,
+            "correct_option": question.correct_option,
+            "current_score": participant.score
+        }, status=status.HTTP_200_OK)
+
+
+class ReviveParticipantView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, quiz_id):
+        user = request.user
+        try:
+            quiz = LiveQuiz.objects.get(id=quiz_id, is_active=True)
+            participant = QuizParticipant.objects.get(user=user, quiz=quiz)
+        except (LiveQuiz.DoesNotExist, QuizParticipant.DoesNotExist):
+            return Response({"error": "المشارك أو المسابقة غير موجودة"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # اقتطاع الـ Coins لإعادة الإنعاش
+        revive_cost = quiz.revive_cost_coins
+        if user.coins < revive_cost:
+            return Response({"error": "رصيد الكوينز غير كافٍ للإنعاش"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.coins -= revive_cost
+        user.save()
+
+        participant.is_eliminated = False
+        participant.save()
+
+        return Response({
+            "message": "تم الإنعاش بنجاح والعودة للمسابقة",
+            "remaining_coins": user.coins
+        }, status=status.HTTP_200_OK)
+
+
+
+def test_quiz_view(request, quiz_id):
+    quiz = get_object_or_404(LiveQuiz, id=quiz_id)
+    return render(request, 'quizApi/index.html', {'quiz_id': quiz_id})

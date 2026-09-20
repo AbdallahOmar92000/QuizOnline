@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>اختبار المسابقة المباشرة</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f4f6f8; display: flex; justify-content: center; padding-top: 40px; }
+        .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center; }
+        .timer { font-size: 24px; font-weight: bold; color: #e63946; margin: 15px 0; }
+        .question { font-size: 18px; margin-bottom: 20px; font-weight: 600; min-height: 50px; }
+        .options { display: flex; flex-direction: column; gap: 10px; }
+        .option-btn { padding: 12px; border: 1px solid #ccc; background: #f8f9fa; border-radius: 8px; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        .option-btn:hover:not(:disabled) { background: #e9ecef; }
+        .option-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h3 id="quiz-title">في انتظار الاتصال...</h3>
+    <div id="timer" class="timer">--</div>
+    <hr>
+    <div id="question-text" class="question">سيظهر السؤال هنا...</div>
+    
+    <div class="options">
+        <button class="option-btn" id="opt-a" onclick="submitAnswer('A')" disabled>أ</button>
+        <button class="option-btn" id="opt-b" onclick="submitAnswer('B')" disabled>ب</button>
+        <button class="option-btn" id="opt-c" onclick="submitAnswer('C')" disabled>ج</button>
+        <button class="option-btn" id="opt-d" onclick="submitAnswer('D')" disabled>د</button>
+    </div>
+</div>
+
+<script>
+const quizId = "{{ quiz_id }}"; 
+const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+const socket = new WebSocket(`${wsProtocol}${window.location.host}/ws/quiz/${quizId}/`);
+
+let currentQuestionId = null;
+
+socket.onopen = function() {
+    console.log("تم الاتصال بـ WebSocket للمسابقة:", quizId);
+    document.getElementById('quiz-title').innerText = "تم الاتصال 🟢 في انتظار البث...";
+};
+
+socket.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    console.log("حدث مستلم:", data);
+
+    // 1. بداية المسابقة
+    if (data.type === 'broadcast_quiz_start') {
+        document.getElementById('quiz-title').innerText = "بدأت المسابقة الآن! 🚀";
+    } 
+    
+    // 2. وصول السؤال
+    else if (data.type === 'broadcast_question') {
+        currentQuestionId = data.question_id;
+        const qNumber = data.order || data.question_number || 1;
+        
+        document.getElementById('quiz-title').innerText = `سؤال (${qNumber}/${data.total_questions})`;
+        document.getElementById('question-text').innerText = data.question_text;
+        
+        const options = data.options || {};
+        document.getElementById('opt-a').innerText = options.A || 'أ';
+        document.getElementById('opt-b').innerText = options.B || 'ب';
+        document.getElementById('opt-c').innerText = options.C || 'ج';
+        document.getElementById('opt-d').innerText = options.D || 'د';
+        
+        document.getElementById('timer').innerText = data.duration_seconds || data.time_limit || 15;
+
+        // تفعيل الأزرار
+        document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = false);
+    } 
+    
+    // 3. كشف الإجابة الصحيحة
+    else if (data.type === 'broadcast_answer_reveal') {
+        document.getElementById('quiz-title').innerText = `الإجابة الصحيحة هي: (${data.correct_option})`;
+        document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+        document.getElementById('timer').innerText = data.revive_duration_seconds || 5;
+    } 
+    
+    // 4. نهاية المسابقة
+    else if (data.type === 'broadcast_quiz_finish') {
+        document.getElementById('quiz-title').innerText = "انتهت المسابقة 🏁";
+        document.getElementById('timer').innerText = "0";
+        document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+    }
+};
+
+socket.onclose = function(e) {
+    if (e.code === 4004) {
+        document.getElementById('quiz-title').innerText = "المسابقة غير موجودة! 🔴";
+    } else {
+        document.getElementById('quiz-title').innerText = "تم قطع الاتصال 🔴";
+    }
+    document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+};
+
+// دالة إرسال الإجابة المختارة
+function submitAnswer(selectedOption) {
+    console.log(`تم اختيار الإجابة: ${selectedOption} للسؤال: ${currentQuestionId}`);
+    
+    document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            'action': 'submit_answer',
+            'question_id': currentQuestionId,
+            'selected_option': selectedOption
+        }));
+    }
+}
+</script> 
+</body>
+</html>

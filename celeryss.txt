@@ -1,0 +1,15 @@
+:: 1. تشغيل سيرفر الدجانجو و Channels (Daphne)
+python manage.py runserver
+
+:: 2. تشغيل Celery Worker مع دعم solo للويندوز
+celery -A config worker --loglevel=info -P solo
+
+:: 3. تشغيل Celery Beat لتنفيذ الجدولة اليومية الساعة 3 مساءً
+celery -A config beat --loglevel=info
+
+
+
+
+daphne -p 8000 config.asgi:application
+ celery -A config worker -l info --pool=solo
+  memurai-cli
